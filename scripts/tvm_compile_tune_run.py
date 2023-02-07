@@ -1,10 +1,16 @@
 # Standard imports
-from typing import Any
-from pydantic.dataclasses import dataclass
 import logging
+from typing import Any
 
 # Third party imports
 import numpy as np
+import onnx
+import tvm
+import tvm.relay as relay
+from PIL import Image
+from pydantic.dataclasses import dataclass
+from tvm.contrib import graph_executor
+from tvm.contrib.download import download_testdata
 from tvm.driver import tvmc
 
 logger = logging.getLogger(__name__)
@@ -18,6 +24,7 @@ INPUTS = np.load("../imagenet_cat.npz")
 
 
 def preprocess():
+    # Third party imports
     from PIL import Image
     from tvm.contrib.download import download_testdata
 
@@ -46,6 +53,7 @@ def preprocess():
 
 
 def postprocess(result: dict[str, Any]):
+    # Third party imports
     from scipy.special import softmax
     from tvm.contrib.download import download_testdata
 
@@ -66,7 +74,7 @@ def postprocess(result: dict[str, Any]):
 
 
 @dataclass
-class TVM:
+class TVMC:
     """
     This class wraps all TVM interfaces.
     """
@@ -130,24 +138,24 @@ class TVM:
 if __name__ == "__main__":
     img_data = preprocess()
 
-    tvm_instance = TVM()
+    tvmc_instance = TVMC()
 
     input_name = "data"
     shape_dict = {input_name: img_data.shape}
 
-    tvm_instance.init_onnx(
+    tvmc_instance.init_onnx(
         onnx_file="../assets/resnet50-v2-7.onnx",
         shape_dict=shape_dict,
     )
 
     if enable_relay_stdout:
-        tvm_instance.print_summary()
+        tvmc_instance.print_summary()
 
-    # tvm_instance.tune_model(target=TARGET)
+    # tvmc_instance.tune_model(target=TARGET)
 
-    tvm_instance.compile_model(target=TARGET)
+    tvmc_instance.compile_model(target=TARGET)
 
-    result = tvm_instance.run_model()
+    result = tvmc_instance.run_model()
 
     if result is None:
         logger.warning("Results:")
