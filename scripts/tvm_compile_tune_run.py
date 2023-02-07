@@ -1,12 +1,10 @@
 # Standard imports
+from typing import Any
+from pydantic.dataclasses import dataclass
 import logging
 
 # Third party imports
 import numpy as np
-from PIL import Image
-from tvm.contrib.download import download_testdata
-
-# TVM imports
 from tvm.driver import tvmc
 
 logger = logging.getLogger(__name__)
@@ -18,7 +16,11 @@ COMPILED_PACKAGE_PATH = "resnet50-v2-7-tvm-python.tar"
 enable_relay_stdout = False
 INPUTS = np.load("../imagenet_cat.npz")
 
-if __name__ == "__main__":
+
+def preprocess():
+    from PIL import Image
+    from tvm.contrib.download import download_testdata
+
     img_url = "https://s3.amazonaws.com/model-server/inputs/kitten.jpg"
     img_path = download_testdata(img_url, "imagenet_cat.png", module="data")
 
@@ -40,38 +42,14 @@ if __name__ == "__main__":
 
     # Add batch dimension
     img_data = np.expand_dims(norm_img_data, axis=0)
+    return img_data
 
-    model = tvmc.load(
-        "../assets/resnet50-v2-7.onnx",
-        shape_dict={"data": [1, 3, 224, 224]},
-    )  # Step 1: Load + shape_dict
 
-    if enable_relay_stdout:
-        logger.warning("RELAY:")
-        model.summary()  # display Relay
-
-    # tvmc tune --target "llvm" --output resnet50-v2-7-python-autotuner_records.json assets/resnet50-v2-7.onnx
-    # logger.warning("Tuning the model...")
-    # tvmc.tune(model, target=TARGET, tuning_records=TUNING_LOG_FILE)
-
-    # tvmc compile --target "llvm" --tuning-records resnet50-v2-7-autotuner_records.json  --output resnet50-v2-7-tvm_autotuned.tar assets/resnet50-v2-7.onnx
-    logger.warning("Compiling model...")
-    package = tvmc.compile(
-        model,
-        target=TARGET,
-        package_path=COMPILED_PACKAGE_PATH,
-        # tuning_records=TUNING_LOG_FILE,
-    )
-
-    logger.warning("Running model...")
-    result = tvmc.run(package, device="cpu", inputs={"data": img_data})
-
-    logger.warning("Results:")
-    print(result)
-
+def postprocess(result: dict[str, Any]):
     from scipy.special import softmax
+    from tvm.contrib.download import download_testdata
 
-    scores = softmax(result.get_output("output_0"))  # type: ignore
+    scores = softmax(result["output_0"])
     scores = np.squeeze(scores)
     ranks = np.argsort(scores)[::-1]
 
@@ -85,3 +63,91 @@ if __name__ == "__main__":
             print(
                 "class='%s' with probability=%f" % (labels[rank], scores[rank])
             )
+
+
+@dataclass
+class TVM:
+    """
+    This class wraps all TVM interfaces.
+    """
+
+    def init_onnx(self, onnx_file: str, shape_dict: dict[str, Any]):
+        self.load_onnx(onnx_file=onnx_file, shape_dict=shape_dict)
+
+    def load_onnx(self, onnx_file: str, shape_dict: dict[str, Any]):
+        self.model = tvmc.load(
+            onnx_file,
+            shape_dict=shape_dict,
+        )
+
+    def print_summary(self):
+        """
+        This method prints the summary of the Relay IR.
+        """
+        self.model.summary()
+
+    def compile_model(self, target: str):
+        """
+        This method compiles the TVMCModel
+
+        tvmc compile --target "llvm" --tuning-records
+        resnet50-v2-7-autotuner_records.json  --output
+        resnet50-v2-7-tvm_autotuned.tar assets/resnet50-v2-7.onnx
+        """
+        logger.warning("Compiling model...")
+        self.package = tvmc.compile(
+            self.model,
+            target=target,
+            package_path=COMPILED_PACKAGE_PATH,
+            tuning_records=self.tuning_records,
+        )
+
+    def tune_model(self, target: str):
+        """
+        tvmc tune --target "llvm" --output
+        resnet50-v2-7-python-autotuner_records.json assets/resnet50-v2-7.onnx
+        """
+        logger.warning("Tuning the model...")
+        # tvmc.tune(self.model, target=target, tuning_records=TUNING_LOG_FILE)
+        self.tuning_records = tvmc.tune(self.model, target=target)
+
+    def run_model(self) -> dict[str, Any] | None:
+        """
+        This method runs the TVM model.
+        """
+        logger.warning("Running model...")
+        result = tvmc.run(
+            self.package, device="cpu", inputs={"data": img_data}
+        )
+
+        if result is None:
+            logger.error("Expected result to be TVMCResult, got None instead")
+            return result
+
+        return result.outputs
+
+
+if __name__ == "__main__":
+    img_data = preprocess()
+
+    tvm_instance = TVM()
+
+    tvm_instance.init_onnx(
+        onnx_file="../assets/resnet50-v2-7.onnx",
+        shape_dict={"data": [1, 3, 224, 224]},
+    )
+
+    if enable_relay_stdout:
+        tvm_instance.print_summary()
+
+    # tvm_instance.tune_model(target=TARGET)
+
+    tvm_instance.compile_model(target=TARGET)
+
+    result = tvm_instance.run_model()
+
+    if result is None:
+        logger.warning("Results:")
+        print(result)
+    else:
+        postprocess(result=result)
