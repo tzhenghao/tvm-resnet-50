@@ -99,7 +99,7 @@ class TVM:
             self.model,
             target=target,
             package_path=COMPILED_PACKAGE_PATH,
-            tuning_records=self.tuning_records,
+            # tuning_records=self.tuning_records,
         )
 
     def tune_model(self, target: str):
@@ -132,9 +132,12 @@ if __name__ == "__main__":
 
     tvm_instance = TVM()
 
+    input_name = "data"
+    shape_dict = {input_name: img_data.shape}
+
     tvm_instance.init_onnx(
         onnx_file="../assets/resnet50-v2-7.onnx",
-        shape_dict={"data": [1, 3, 224, 224]},
+        shape_dict=shape_dict,
     )
 
     if enable_relay_stdout:
