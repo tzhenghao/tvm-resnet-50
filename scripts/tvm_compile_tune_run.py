@@ -20,7 +20,6 @@ TUNING_LOG_FILE = "resnet50-v2-7-python-autotuner_records.json"
 TARGET = "llvm"
 COMPILED_PACKAGE_PATH = "resnet50-v2-7-tvm-python.tar"
 enable_relay_stdout = False
-INPUTS = np.load("../imagenet_cat.npz")
 
 # ---------------------------------- TVMC  ----------------------------------
 
@@ -92,7 +91,8 @@ def preprocess_autotvm():
     resized_image = Image.open(img_path).resize((224, 224))
     img_data = np.asarray(resized_image).astype("float32")
 
-    # Our input image is in HWC layout while ONNX expects CHW input, so convert the array
+    # Our input image is in HWC layout while ONNX expects CHW input,
+    # so convert the array
     img_data = np.transpose(img_data, (2, 0, 1))
 
     # Normalize according to the ImageNet input specification
@@ -112,8 +112,8 @@ def postprocess_autotvm(tvm_output):
     labels_url = "https://s3.amazonaws.com/onnx-model-zoo/synset.txt"
     labels_path = download_testdata(labels_url, "synset.txt", module="data")
 
-    with open(labels_path, "r") as f:
-        labels = [l.rstrip() for l in f]
+    with open(labels_path, "r") as file:
+        labels = [label.rstrip() for label in file]
 
     # Open the output and read the output tensor
     scores = softmax(tvm_output)
@@ -208,8 +208,8 @@ class AutoTVM:
         self.module = graph_executor.GraphModule(lib["default"](dev))
 
     def run_model(self):
-        dtype = "float32"
-        self.module.set_input(input_name, img_data)
+        # dtype = "float32"
+        self.module.set_input(INPUT_NAME, img_data)
         self.module.run()
         output_shape = (1, 1000)
         tvm_output = self.module.get_output(
@@ -247,8 +247,8 @@ if __name__ == "__main__":
     # tvmc_instance = TVMC()
     autotvm_instance = AutoTVM()
 
-    input_name = "data"
-    shape_dict = {input_name: img_data.shape}
+    INPUT_NAME = "data"
+    shape_dict = {INPUT_NAME: img_data.shape}
 
     model_url = (
         "https://github.com/onnx/models/raw/main/"
