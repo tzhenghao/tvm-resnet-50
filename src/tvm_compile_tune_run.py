@@ -6,9 +6,12 @@ from typing import Any
 import numpy as np
 import onnx
 import tvm
+import tvm.auto_scheduler as auto_scheduler
 import tvm.relay as relay
 from PIL import Image
 from pydantic.dataclasses import dataclass
+from tvm import autotvm
+from tvm.autotvm.tuner import XGBTuner
 from tvm.contrib import graph_executor
 from tvm.contrib.download import download_testdata
 from tvm.driver import tvmc
@@ -106,6 +109,7 @@ def preprocess_autotvm():
 
 
 def postprocess_autotvm(tvm_output):
+    # Third party imports
     from scipy.special import softmax
 
     # Download a list of labels
@@ -218,6 +222,7 @@ class AutoTVM:
         return tvm_output
 
     def benchmark_model(self):
+        # Standard imports
         import timeit
 
         timing_number = 10
