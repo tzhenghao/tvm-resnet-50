@@ -19,7 +19,7 @@ from tvm.driver import tvmc
 logger = logging.getLogger(__name__)
 
 
-TUNING_LOG_FILE = "resnet50-v2-7-python-autotuner_records.json"
+TUNING_LOG_FILE = "resnet-50-v2-autotuning.json"
 TARGET = "llvm"
 COMPILED_PACKAGE_PATH = "resnet50-v2-7-tvm-python.tar"
 enable_relay_stdout = False
@@ -159,7 +159,7 @@ class AutoTVM:
                 builder=autotvm.LocalBuilder(build_func="default"),
                 runner=runner,
             ),
-            "tuning_records": "resnet-50-v2-autotuning.json",
+            "tuning_records": TUNING_LOG_FILE,
         }
 
         # begin by extracting the tasks from the onnx model
