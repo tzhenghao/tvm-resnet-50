@@ -13,7 +13,7 @@ WORKDIR $APP_HOME
 
 # Install git
 RUN apt-get update \
-    && apt-get -y install git cmake \
+    && apt-get -y install git cmake python3.10 \
     && apt-get clean
 
 # Build TVM
