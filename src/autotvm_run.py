@@ -156,7 +156,7 @@ class AutoTVM:
             an upper limit on how long to run training code for each tested
             configuration
         """
-        click.secho("Tuning the model...", fg="green", bold=True)
+        click.secho("Tuning the model...", fg="green")
         # number = 10
         # repeat = 1
         # min_repeat_ms = 0  # since we're tuning on a CPU, can be set to 0
