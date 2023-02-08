@@ -1,5 +1,6 @@
 # Standard imports
 import logging
+import timeit
 
 # Third party imports
 import click
@@ -7,7 +8,6 @@ import numpy as np
 import tvm
 import tvm.testing
 from tvm import te
-import timeit
 
 logger = logging.getLogger(__name__)
 
