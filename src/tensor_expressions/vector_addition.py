@@ -64,4 +64,6 @@ if __name__ == "__main__":
         bold=True,
     )
 
+    click.secho("Tensor Expression IR:", fg="yellow", bold=True)
+    click.secho(tvm.lower(schedule, [A, B, C], simple_mode=True), fg="yellow")
     click.secho("Done!", fg="green", bold=True)
