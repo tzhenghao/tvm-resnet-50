@@ -17,6 +17,7 @@ TARGET = "llvm"
 COMPILED_PACKAGE_PATH = "resnet50-v2-7-tvm-python.tar"
 enable_relay_stdout = False
 
+
 if __name__ == "__main__":
     tgt = tvm.target.Target(target=TARGET, host=TARGET)
 
@@ -31,16 +32,7 @@ if __name__ == "__main__":
 
     dev = tvm.device(tgt.kind.name, 0)
 
-    n = 1024
-    a = tvm.nd.array(np.random.uniform(size=n).astype(A.dtype), dev)
-    b = tvm.nd.array(np.random.uniform(size=n).astype(B.dtype), dev)
-    c = tvm.nd.array(np.zeros(n, dtype=C.dtype), dev)  # type: ignore
-
-    fadd(a, b, c)
-    tvm.testing.assert_allclose(c.numpy(), a.numpy() + b.numpy())
-
-    click.secho("Done!", fg="green", bold=True)
-
+    click.secho("Running numpy...", fg="yellow")
     np_repeat = 100
     np_running_time = timeit.timeit(
         setup="import numpy\n"
@@ -51,20 +43,25 @@ if __name__ == "__main__":
         stmt="answer = a + b",
         number=np_repeat,
     )
-    print("Numpy running time: %f" % (np_running_time / np_repeat))
+    click.secho(
+        "Numpy running time: {}".format(np_running_time / np_repeat),
+        fg="green",
+        bold=True,
+    )
 
-    def evaluate_addition(func, target, optimization, log):
-        dev = tvm.device(target.kind.name, 0)
-        n = 32768
-        a = tvm.nd.array(np.random.uniform(size=n).astype(A.dtype), dev)
-        b = tvm.nd.array(np.random.uniform(size=n).astype(B.dtype), dev)
-        c = tvm.nd.array(np.zeros(n, dtype=C.dtype), dev)
+    click.secho("Running TE...", fg="yellow")
+    dev = tvm.device(tgt.kind.name, 0)
+    n = 32768
+    a = tvm.nd.array(np.random.uniform(size=n).astype(A.dtype), dev)
+    b = tvm.nd.array(np.random.uniform(size=n).astype(B.dtype), dev)
+    c = tvm.nd.array(np.zeros(n, dtype=C.dtype), dev)
 
-        evaluator = func.time_evaluator(func.entry_name, dev, number=10)
-        mean_time = evaluator(a, b, c).mean
-        print("%s: %f" % (optimization, mean_time))
+    evaluator = fadd.time_evaluator(fadd.entry_name, dev, number=10)
+    mean_time = evaluator(a, b, c).mean
+    click.secho(
+        "TE running time: {}".format(mean_time),
+        fg="green",
+        bold=True,
+    )
 
-        log.append((optimization, mean_time))
-
-    log = [("numpy", np_running_time / np_repeat)]
-    evaluate_addition(fadd, tgt, "naive", log=log)
+    click.secho("Done!", fg="green", bold=True)
