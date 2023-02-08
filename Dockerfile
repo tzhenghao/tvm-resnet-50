@@ -13,16 +13,12 @@ WORKDIR $APP_HOME
 
 # Install git
 RUN apt-get update \
-    && apt-get -y install git \
+    && apt-get -y install git cmake \
     && apt-get clean
 
-# Install CMake.
-COPY infra/ubuntu_install_cmake_source.sh /infra/ubuntu_install_cmake_source.sh
-RUN bash /infra/ubuntu_install_cmake_source.sh
-
 # Build TVM
-COPY infra/install_tvm_gpu.sh /infra/install_tvm_gpu.sh
-RUN bash /infra/install_tvm_gpu.sh
+COPY infra/ubuntu2004_install_llvm.sh /infra/ubuntu2004_install_llvm.sh
+RUN bash /infra/ubuntu2004_install_llvm.sh
 
 # copy the dependencies file to the working directory and install them.
 COPY requirements.txt .
