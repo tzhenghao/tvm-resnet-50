@@ -80,7 +80,9 @@ def postprocess_autotvm(tvm_output):
         print("class='%s' with probability=%f" % (labels[rank], scores[rank]))
 
 
+@dataclass
 class AutoTVM:
+    target: str
     # mod : tvm.IRModule
     #     The relay module for compilation
     # params : dict of str to tvm.nd.NDArray
@@ -95,11 +97,11 @@ class AutoTVM:
             onnx_model, shape_dict
         )
 
-    def compile_model(self, target: str):
+    def compile_model(self):
         with tvm.transform.PassContext(opt_level=3):
-            lib = relay.build(self.mod, target=target, params=self.params)
+            lib = relay.build(self.mod, target=self.target, params=self.params)
 
-        dev = tvm.device(str(target), 0)
+        dev = tvm.device(str(self.target), 0)
         self.module = graph_executor.GraphModule(lib["default"](dev))
 
     def run_model(self):
@@ -111,6 +113,77 @@ class AutoTVM:
             0, tvm.nd.empty(output_shape)
         ).numpy()
         return tvm_output
+
+    def tune_model(
+        self,
+        num_configurations: int,
+        num_measurements_per_config: int,
+        min_ms_per_config: int,
+        timeout: int,
+    ):
+        """
+        Params
+        -------
+        num_configurations: int
+            the number of different configurations that we will test
+        num_measurements_per_config: int
+            how many measurements we will take of each configuration.
+        min_ms_per_config: int
+            how long need to run configuration test. If the number of repeats
+            falls under this time, it will be increased. This option is
+            necessary for accurate tuning on GPUs, and is not required for
+            CPU tuning. Setting this value to 0 disables it.
+        timeout: int
+            an upper limit on how long to run training code for each tested
+            configuration
+        """
+        # number = 10
+        # repeat = 1
+        # min_repeat_ms = 0  # since we're tuning on a CPU, can be set to 0
+        # timeout = 10  # in seconds
+
+        # create a TVM runner
+        runner = autotvm.LocalRunner(
+            number=num_configurations,
+            repeat=num_measurements_per_config,
+            timeout=timeout,
+            min_repeat_ms=min_ms_per_config,
+            enable_cpu_cache_flush=True,
+        )
+
+        tuning_option = {
+            "tuner": "xgb",
+            "trials": 20,
+            "early_stopping": 100,
+            "measure_option": autotvm.measure_option(
+                builder=autotvm.LocalBuilder(build_func="default"),
+                runner=runner,
+            ),
+            "tuning_records": "resnet-50-v2-autotuning.json",
+        }
+
+        # begin by extracting the tasks from the onnx model
+        tasks = autotvm.task.extract_from_program(
+            self.mod["main"], target=self.target, params=self.params
+        )
+
+        # Tune the extracted tasks sequentially.
+        for i, task in enumerate(tasks):
+            prefix = "[Task %2d/%2d] " % (i + 1, len(tasks))
+            tuner_obj = XGBTuner(task, loss_type="rank")
+            tuner_obj.tune(
+                n_trial=min(tuning_option["trials"], len(task.config_space)),
+                early_stopping=tuning_option["early_stopping"],
+                measure_option=tuning_option["measure_option"],
+                callbacks=[
+                    autotvm.callback.progress_bar(
+                        tuning_option["trials"], prefix=prefix
+                    ),
+                    autotvm.callback.log_to_file(
+                        tuning_option["tuning_records"]
+                    ),
+                ],
+            )
 
     def benchmark_model(self):
         # Standard imports
@@ -139,7 +212,7 @@ class AutoTVM:
 if __name__ == "__main__":
     img_data = preprocess_autotvm()
 
-    autotvm_instance = AutoTVM()
+    autotvm_instance = AutoTVM(target=TARGET)
 
     INPUT_NAME = "data"
     shape_dict = {INPUT_NAME: img_data.shape}
@@ -158,10 +231,19 @@ if __name__ == "__main__":
 
     autotvm_instance.init_from_onnx(onnx_model=onnx_model)
 
-    autotvm_instance.compile_model(target=TARGET)
+    # min_ms_per_config = 0  # since we're tuning on a CPU, can be set to 0
+    # timeout = 10  # in seconds
+    autotvm_instance.tune_model(
+        num_configurations=10,
+        num_measurements_per_config=1,
+        min_ms_per_config=0,
+        timeout=10,
+    )
 
-    tvm_output = autotvm_instance.run_model()
+    # autotvm_instance.compile_model()
 
-    autotvm_instance.benchmark_model()
+    # tvm_output = autotvm_instance.run_model()
 
-    postprocess_autotvm(tvm_output=tvm_output)
+    # autotvm_instance.benchmark_model()
+
+    # postprocess_autotvm(tvm_output=tvm_output)
