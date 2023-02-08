@@ -18,21 +18,7 @@ COMPILED_PACKAGE_PATH = "resnet50-v2-7-tvm-python.tar"
 enable_relay_stdout = False
 
 
-if __name__ == "__main__":
-    tgt = tvm.target.Target(target=TARGET, host=TARGET)
-
-    n = te.var("n")
-    A = te.placeholder((n,), name="A")
-    B = te.placeholder((n,), name="B")
-    C = te.compute(A.shape, lambda i: A[i] + B[i], name="C")
-
-    schedule = te.create_schedule(C.op)  # type: ignore
-
-    fadd = tvm.build(schedule, [A, B, C], tgt, name="myadd")
-
-    dev = tvm.device(tgt.kind.name, 0)
-
-    click.secho("Running numpy...", fg="yellow")
+def run_numpy():
     np_repeat = 100
     np_running_time = timeit.timeit(
         setup="import numpy\n"
@@ -49,12 +35,12 @@ if __name__ == "__main__":
         bold=True,
     )
 
-    click.secho("Running TE...", fg="yellow")
+def run_te_serial(fadd):
     dev = tvm.device(tgt.kind.name, 0)
     n = 32768
     a = tvm.nd.array(np.random.uniform(size=n).astype(A.dtype), dev)
     b = tvm.nd.array(np.random.uniform(size=n).astype(B.dtype), dev)
-    c = tvm.nd.array(np.zeros(n, dtype=C.dtype), dev)
+    c = tvm.nd.array(np.zeros(n, dtype=C.dtype), dev)  # type: ignore
 
     evaluator = fadd.time_evaluator(fadd.entry_name, dev, number=10)
     mean_time = evaluator(a, b, c).mean
@@ -63,6 +49,23 @@ if __name__ == "__main__":
         fg="green",
         bold=True,
     )
+
+if __name__ == "__main__":
+    tgt = tvm.target.Target(target=TARGET, host=TARGET)
+
+    n = te.var("n")
+    A = te.placeholder((n,), name="A")
+    B = te.placeholder((n,), name="B")
+    C = te.compute(A.shape, lambda i: A[i] + B[i], name="C")
+
+    schedule = te.create_schedule(C.op)  # type: ignore
+    fadd = tvm.build(schedule, [A, B, C], tgt, name="myadd")
+
+    click.secho("Running TE...", fg="yellow")
+    run_te_serial(fadd=fadd)
+
+    click.secho("Running numpy...", fg="yellow")
+    run_numpy()
 
     click.secho("Tensor Expression IR:", fg="yellow", bold=True)
     click.secho(tvm.lower(schedule, [A, B, C], simple_mode=True), fg="yellow")
