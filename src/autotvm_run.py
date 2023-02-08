@@ -1,6 +1,7 @@
 # Standard imports
 import logging
 from typing import Any
+import click
 
 # Third party imports
 import numpy as np
@@ -97,9 +98,27 @@ class AutoTVM:
             onnx_model, shape_dict
         )
 
-    def compile_model(self):
-        with tvm.transform.PassContext(opt_level=3):
-            lib = relay.build(self.mod, target=self.target, params=self.params)
+    def compile_model(self, tuning_records: str | None = None):
+        """
+        This method compiles the current model.
+
+        Params
+        -----
+        tuning_records: str | None
+            The str path to the tuning_records file.
+        """
+        if tuning_records is None:
+            with tvm.transform.PassContext(opt_level=3):
+                lib = relay.build(
+                    self.mod, target=self.target, params=self.params
+                )
+
+        else:
+            with autotvm.apply_history_best(tuning_records):
+                with tvm.transform.PassContext(opt_level=3, config={}):
+                    lib = relay.build(
+                        self.mod, target=self.target, params=self.params
+                    )
 
         dev = tvm.device(str(self.target), 0)
         self.module = graph_executor.GraphModule(lib["default"](dev))
@@ -137,6 +156,7 @@ class AutoTVM:
             an upper limit on how long to run training code for each tested
             configuration
         """
+        click.secho("Tuning the model...", fg="green", bold=True)
         # number = 10
         # repeat = 1
         # min_repeat_ms = 0  # since we're tuning on a CPU, can be set to 0
@@ -151,6 +171,7 @@ class AutoTVM:
             enable_cpu_cache_flush=True,
         )
 
+        # TODO(zheng): Make this a tuning config dataclass.
         tuning_option = {
             "tuner": "xgb",
             "trials": 20,
@@ -191,7 +212,7 @@ class AutoTVM:
 
         timing_number = 10
         timing_repeat = 10
-        unoptimized = (
+        benchmark_results = (
             np.array(
                 timeit.Timer(lambda: self.module.run()).repeat(
                     repeat=timing_repeat, number=timing_number
@@ -200,13 +221,13 @@ class AutoTVM:
             * 1000
             / timing_number
         )
-        unoptimized = {
-            "mean": np.mean(unoptimized),
-            "median": np.median(unoptimized),
-            "std": np.std(unoptimized),
+        benchmark_results = {
+            "mean": np.mean(benchmark_results),
+            "median": np.median(benchmark_results),
+            "std": np.std(benchmark_results),
         }
 
-        print(unoptimized)
+        print(benchmark_results)
 
 
 if __name__ == "__main__":
@@ -231,6 +252,18 @@ if __name__ == "__main__":
 
     autotvm_instance.init_from_onnx(onnx_model=onnx_model)
 
+    click.secho("BEFORE OPTIMIZATION:", fg="green", bold=True)
+
+    autotvm_instance.compile_model()
+
+    tvm_output = autotvm_instance.run_model()
+
+    autotvm_instance.benchmark_model()
+
+    postprocess_autotvm(tvm_output=tvm_output)
+
+    click.secho("AFTER OPTIMIZATION:", fg="green", bold=True)
+
     # min_ms_per_config = 0  # since we're tuning on a CPU, can be set to 0
     # timeout = 10  # in seconds
     autotvm_instance.tune_model(
@@ -240,10 +273,10 @@ if __name__ == "__main__":
         timeout=10,
     )
 
-    # autotvm_instance.compile_model()
+    autotvm_instance.compile_model(tuning_records=TUNING_LOG_FILE)
 
-    # tvm_output = autotvm_instance.run_model()
+    tvm_output = autotvm_instance.run_model()
 
-    # autotvm_instance.benchmark_model()
+    autotvm_instance.benchmark_model()
 
-    # postprocess_autotvm(tvm_output=tvm_output)
+    postprocess_autotvm(tvm_output=tvm_output)
