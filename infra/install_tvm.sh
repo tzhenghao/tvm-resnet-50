@@ -8,7 +8,7 @@ git clone --recursive https://github.com/apache/tvm tvm
 cd /usr/tvm
 
 # set flags
-echo set\(USE_LLVM llvm-config-8\) >> cmake/config.cmake
+echo set\(USE_LLVM ON\) >> cmake/config.cmake
 echo set\(USE_CUDA ON\) >> cmake/config.cmake
 echo set\(USE_CUDNN ON\) >> cmake/config.cmake
 echo set\(USE_BLAS openblas\) >> cmake/config.cmake
@@ -20,5 +20,5 @@ echo set\(USE_PROFILER ON\) >> cmake/config.cmake
 cd /usr/tvm
 mkdir -p build
 cd build
-cmake ..
-make -j10
+cmake .. -G Ninja
+ninja
