@@ -2,16 +2,23 @@
 
 set -euxo pipefail
 
-echo deb http://apt.llvm.org/focal/ llvm-toolchain-focal main\
-    >> /etc/apt/sources.list.d/llvm.list
+# clone the repo
+cd /usr
+git clone --recursive https://github.com/apache/tvm tvm
+cd /usr/tvm
 
-echo deb http://apt.llvm.org/focal/ llvm-toolchain-focal-13 main\
-    >> /etc/apt/sources.list.d/llvm.list
+# set flags
+echo set\(USE_LLVM llvm-config-8\) >> cmake/config.cmake
+echo set\(USE_CUDA ON\) >> cmake/config.cmake
+echo set\(USE_CUDNN ON\) >> cmake/config.cmake
+echo set\(USE_BLAS openblas\) >> cmake/config.cmake
 
-apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 15CF4D18AF4F7421
+# set debugging flags
+echo set\(USE_GRAPH_EXECUTOR ON\) >> cmake/config.cmake
+echo set\(USE_PROFILER ON\) >> cmake/config.cmake
 
-apt-get update && apt-get install -y \
-     llvm-11 llvm-12 llvm-13 \
-     clang-11 libclang-11-dev \
-     clang-12 libclang-12-dev \
-     clang-13 libclang-13-dev
+cd /usr/tvm
+mkdir -p build
+cd build
+cmake ..
+make -j10
