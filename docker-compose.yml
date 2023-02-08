@@ -1,0 +1,9 @@
+version: "3.7"
+services:
+  tvm_local_dev:
+    image: tvm/local_dev
+    build:
+      context: .
+    volumes:
+      - .:/app
+    profiles: ["dev"]
