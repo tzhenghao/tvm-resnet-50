@@ -1,7 +1,3 @@
-# set base image
-# FROM public.ecr.aws/docker/library/python:3.10
-
-# Minimum docker image for demo purposes
 FROM nvidia/cuda:11.8.0-cudnn8-devel-ubuntu22.04
 
 # WORKDIR
@@ -16,9 +12,13 @@ RUN apt-get update \
     && apt-get -y install git cmake python3.10 python3-pip \
     && apt-get clean
 
+# Build LLVM
+COPY infra/install_llvm.sh /infra/install_llvm.sh
+RUN bash /infra/install_llvm.sh
+
 # Build TVM
-COPY infra/ubuntu2004_install_llvm.sh /infra/ubuntu2004_install_llvm.sh
-RUN bash /infra/ubuntu2004_install_llvm.sh
+COPY infra/install_tvm.sh /infra/install_tvm.sh
+RUN bash /infra/install_tvm.sh
 
 # copy the dependencies file to the working directory and install them.
 COPY requirements.txt .
