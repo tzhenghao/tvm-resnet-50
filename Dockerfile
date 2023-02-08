@@ -2,9 +2,7 @@
 # FROM public.ecr.aws/docker/library/python:3.10
 
 # Minimum docker image for demo purposes
-# CI docker GPU env
-# tag: v0.54
-FROM tlcpack/ci-gpu:v0.55
+FROM nvidia/cuda:11.8.0-cudnn8-devel-ubuntu22.04
 
 # WORKDIR
 ENV APP_HOME=/app
@@ -21,15 +19,15 @@ RUN apt-get update
 COPY infra/install_tvm_gpu.sh /infra/install_tvm_gpu.sh
 RUN bash /infra/install_tvm_gpu.sh
 
+# copy the dependencies file to the working directory and install them.
+COPY requirements.txt .
+RUN pip install -r requirements.txt
+
 # Environment variables
 ENV PYTHONPATH=/usr/tvm/python:/usr/tvm/vta/python:${PYTHONPATH}
 ENV PATH=/usr/local/nvidia/bin:${PATH}
 ENV PATH=/usr/local/cuda/bin:${PATH}
 ENV LD_LIBRARY_PATH=/usr/local/cuda/lib64:/usr/local/nvidia/lib64:${LD_LIBRARY_PATH}
-
-# copy the dependencies file to the working directory and install them.
-COPY requirements.txt .
-RUN pip install -r requirements.txt
 
 # Copy the source files to the working directory
 COPY . .
