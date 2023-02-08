@@ -11,7 +11,10 @@ RUN mkdir -p $APP_HOME
 # Set the working directory in the container
 WORKDIR $APP_HOME
 
-RUN apt-get update
+# Install git
+RUN apt-get update \
+    && apt-get -y install git cmake \
+    && apt-get clean
 
 # COPY utils/apt-install-and-clear.sh /usr/local/bin/apt-install-and-clear
 
@@ -33,4 +36,4 @@ ENV LD_LIBRARY_PATH=/usr/local/cuda/lib64:/usr/local/nvidia/lib64:${LD_LIBRARY_P
 COPY . .
 
 # Run the container
-CMD [ "echo", "done"]
+CMD ["/bin/bash"]
