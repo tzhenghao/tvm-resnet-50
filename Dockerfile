@@ -13,10 +13,12 @@ WORKDIR $APP_HOME
 
 # Install git
 RUN apt-get update \
-    && apt-get -y install git cmake \
+    && apt-get -y install git \
     && apt-get clean
 
-# COPY utils/apt-install-and-clear.sh /usr/local/bin/apt-install-and-clear
+# Install CMake.
+COPY infra/ubuntu_install_cmake_source.sh /infra/ubuntu_install_cmake_source.sh
+RUN bash /infra/ubuntu_install_cmake_source.sh
 
 # Build TVM
 COPY infra/install_tvm_gpu.sh /infra/install_tvm_gpu.sh
