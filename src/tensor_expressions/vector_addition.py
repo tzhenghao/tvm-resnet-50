@@ -287,7 +287,7 @@ if __name__ == "__main__":
     # If you want to run this code, change ``run_cuda = True``
     # Note that by default this example is not run in the docs CI.
 
-    run_cuda = False
+    run_cuda = True
     if run_cuda:
         # Change this target to the correct backend for you gpu. For example: cuda (NVIDIA GPUs),
         # rocm (Radeon GPUS), OpenCL (opencl).
