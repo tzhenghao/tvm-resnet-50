@@ -369,8 +369,8 @@ if __name__ == "__main__":
             or tgt_gpu.kind.name.startswith("opencl")
         ):
             dev_module = fadd.imported_modules[0]
-            print("-----GPU code-----")
-            print(dev_module.get_source())
+            click.secho("-----GPU code-----", fg="yellow", bold=True)
+            click.secho(dev_module.get_source(), fg="yellow")
         else:
             print(fadd.get_source())
 
