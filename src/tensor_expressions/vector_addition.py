@@ -398,7 +398,7 @@ if __name__ == "__main__":
     if tgt.kind.name.startswith("opencl"):
         fadd.imported_modules[0].save(temp.relpath("myadd.cl"))
     cc.create_shared(temp.relpath("myadd.so"), [temp.relpath("myadd.o")])
-    print(temp.listdir())
+    click.secho(temp.listdir(), fg="green")
 
     ################################################################################
     # .. admonition:: Module Storage Format
