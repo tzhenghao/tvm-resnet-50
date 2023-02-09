@@ -242,18 +242,20 @@ if __name__ == "__main__":
     # We can now compare the different schedules
 
     baseline = log[0][1]
-    print(
+    click.secho(
         "%s\t%s\t%s"
-        % ("Operator".rjust(20), "Timing".rjust(20), "Performance".rjust(20))
+        % ("Operator".rjust(20), "Timing".rjust(20), "Performance".rjust(20)),
+        fg="yellow",
     )
     for result in log:
-        print(
+        click.secho(
             "%s\t%s\t%s"
             % (
                 result[0].rjust(20),
                 str(result[1]).rjust(20),
                 str(result[1] / baseline).rjust(20),
-            )
+            ),
+            fg="yellow",
         )
 
     ################################################################################
