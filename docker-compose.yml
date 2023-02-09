@@ -1,7 +1,14 @@
 version: "3.7"
 services:
-  zheng_tvm_local_dev:
-    image: tzhenghao/tvm/local_dev
+  tvm_local_dev_cpu:
+    image: my-tvm/local_dev/cpu
+    build:
+      context: .
+    volumes:
+      - .:/app
+    profiles: ["dev"]
+  tvm_local_dev_gpu:
+    image: my-tvm/local_dev/gpu
     build:
       context: .
     volumes:
