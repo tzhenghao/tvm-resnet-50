@@ -553,11 +553,6 @@ if __name__ == "__main__":
     # We begin by collecting performance data on the `numpy` implementation of
     # matrix multiplication.
 
-    import tvm
-    import tvm.testing
-    from tvm import te
-    import numpy
-
     # The size of the matrix
     # (M, K) x (K, N)
     # You are free to try out different shapes, sometimes TVM optimization outperforms numpy with MKL.
@@ -580,8 +575,8 @@ if __name__ == "__main__":
     dev = tvm.device(target.kind.name, 0)
 
     # Random generated tensor for testing
-    a = tvm.nd.array(numpy.random.rand(M, K).astype(dtype), dev)
-    b = tvm.nd.array(numpy.random.rand(K, N).astype(dtype), dev)
+    a = tvm.nd.array(np.random.rand(M, K).astype(dtype), dev)
+    b = tvm.nd.array(np.random.rand(K, N).astype(dtype), dev)
 
     # Repeatedly perform a matrix multiplication to get a performance baseline
     # for the default numpy implementation
@@ -603,7 +598,7 @@ if __name__ == "__main__":
         bold=True,
     )
 
-    answer = numpy.dot(a.numpy(), b.numpy())
+    answer = np.dot(a.numpy(), b.numpy())
 
     ################################################################################
     # Now we write a basic matrix multiplication using TVM TE and verify that it
@@ -623,7 +618,7 @@ if __name__ == "__main__":
     s = te.create_schedule(C.op)
     func = tvm.build(s, [A, B, C], target=target, name="mmult")
 
-    c = tvm.nd.array(numpy.zeros((M, N), dtype=dtype), dev)
+    c = tvm.nd.array(np.zeros((M, N), dtype=dtype), dev)
     func(a, b, c)
     tvm.testing.assert_allclose(c.numpy(), answer, rtol=1e-5)
 
@@ -631,7 +626,7 @@ if __name__ == "__main__":
         func = tvm.build(s, [A, B, C], target=target, name="mmult")
         assert func
 
-        c = tvm.nd.array(numpy.zeros((M, N), dtype=dtype), dev)
+        c = tvm.nd.array(np.zeros((M, N), dtype=dtype), dev)
         func(a, b, c)
         tvm.testing.assert_allclose(c.numpy(), answer, rtol=1e-5)
 
