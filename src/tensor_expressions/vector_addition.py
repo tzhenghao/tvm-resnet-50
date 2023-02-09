@@ -374,62 +374,62 @@ if __name__ == "__main__":
         else:
             print(fadd.get_source())
 
-    ################################################################################
-    # Saving and Loading Compiled Modules
-    # -----------------------------------
-    # Besides runtime compilation, we can save the compiled modules into a file and
-    # load them back later.
-    #
-    # The following code first performs the following steps:
-    #
-    # - It saves the compiled host module into an object file.
-    # - Then it saves the device module into a ptx file.
-    # - cc.create_shared calls a compiler (gcc) to create a shared library
+        ################################################################################
+        # Saving and Loading Compiled Modules
+        # -----------------------------------
+        # Besides runtime compilation, we can save the compiled modules into a file and
+        # load them back later.
+        #
+        # The following code first performs the following steps:
+        #
+        # - It saves the compiled host module into an object file.
+        # - Then it saves the device module into a ptx file.
+        # - cc.create_shared calls a compiler (gcc) to create a shared library
 
-    from tvm.contrib import cc
-    from tvm.contrib import utils
+        from tvm.contrib import cc
+        from tvm.contrib import utils
 
-    temp = utils.tempdir()
-    fadd.save(temp.relpath("myadd.o"))
-    if tgt.kind.name == "cuda":
-        fadd.imported_modules[0].save(temp.relpath("myadd.ptx"))
-    if tgt.kind.name == "rocm":
-        fadd.imported_modules[0].save(temp.relpath("myadd.hsaco"))
-    if tgt.kind.name.startswith("opencl"):
-        fadd.imported_modules[0].save(temp.relpath("myadd.cl"))
-    cc.create_shared(temp.relpath("myadd.so"), [temp.relpath("myadd.o")])
-    click.secho(temp.listdir(), fg="green")
+        temp = utils.tempdir()
+        fadd.save(temp.relpath("myadd.o"))
+        if tgt_gpu.kind.name == "cuda":
+            fadd.imported_modules[0].save(temp.relpath("myadd.cubin"))
+        if tgt_gpu.kind.name == "rocm":
+            fadd.imported_modules[0].save(temp.relpath("myadd.hsaco"))
+        if tgt_gpu.kind.name.startswith("opencl"):
+            fadd.imported_modules[0].save(temp.relpath("myadd.cl"))
+        cc.create_shared(temp.relpath("myadd.so"), [temp.relpath("myadd.o")])
+        click.secho(temp.listdir(), fg="green")
 
-    ################################################################################
-    # .. admonition:: Module Storage Format
-    #
-    #   The CPU (host) module is directly saved as a shared library (.so). There
-    #   can be multiple customized formats of the device code. In our example, the
-    #   device code is stored in ptx, as well as a meta data json file. They can be
-    #   loaded and linked separately via import.
+        ################################################################################
+        # .. admonition:: Module Storage Format
+        #
+        #   The CPU (host) module is directly saved as a shared library (.so). There
+        #   can be multiple customized formats of the device code. In our example, the
+        #   device code is stored in ptx, as well as a meta data json file. They can be
+        #   loaded and linked separately via import.
 
-    ################################################################################
-    # Load Compiled Module
-    # ~~~~~~~~~~~~~~~~~~~~
-    # We can load the compiled module from the file system and run the code. The
-    # following code loads the host and device module separately and links them
-    # together. We can verify that the newly loaded function works.
+        ################################################################################
+        # Load Compiled Module
+        # ~~~~~~~~~~~~~~~~~~~~
+        # We can load the compiled module from the file system and run the code. The
+        # following code loads the host and device module separately and links them
+        # together. We can verify that the newly loaded function works.
 
-    fadd1 = tvm.runtime.load_module(temp.relpath("myadd.so"))
-    if tgt.kind.name == "cuda":
-        fadd1_dev = tvm.runtime.load_module(temp.relpath("myadd.ptx"))
-        fadd1.import_module(fadd1_dev)
+        fadd1 = tvm.runtime.load_module(temp.relpath("myadd.so"))
+        if tgt_gpu.kind.name == "cuda":
+            fadd1_dev = tvm.runtime.load_module(temp.relpath("myadd.cubin"))
+            fadd1.import_module(fadd1_dev)
 
-    if tgt.kind.name == "rocm":
-        fadd1_dev = tvm.runtime.load_module(temp.relpath("myadd.hsaco"))
-        fadd1.import_module(fadd1_dev)
+        if tgt_gpu.kind.name == "rocm":
+            fadd1_dev = tvm.runtime.load_module(temp.relpath("myadd.hsaco"))
+            fadd1.import_module(fadd1_dev)
 
-    if tgt.kind.name.startswith("opencl"):
-        fadd1_dev = tvm.runtime.load_module(temp.relpath("myadd.cl"))
-        fadd1.import_module(fadd1_dev)
+        if tgt_gpu.kind.name.startswith("opencl"):
+            fadd1_dev = tvm.runtime.load_module(temp.relpath("myadd.cl"))
+            fadd1.import_module(fadd1_dev)
 
-    fadd1(a, b, c)
-    tvm.testing.assert_allclose(c.numpy(), a.numpy() + b.numpy())
+        fadd1(a, b, c)
+        tvm.testing.assert_allclose(c.numpy(), a.numpy() + b.numpy())
 
     ################################################################################
     # Pack Everything into One Library
