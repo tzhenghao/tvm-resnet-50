@@ -7,19 +7,11 @@ cd /usr
 git clone --recursive https://github.com/apache/tvm tvm
 cd /usr/tvm
 
-cp /infra/config.cmake cmake/config.cmake
-# # set flags
-# echo set\(USE_LLVM llvm-config-13\) >> cmake/config.cmake
-# echo set\(USE_CUDA ON\) >> cmake/config.cmake
-# echo set\(USE_CUDNN ON\) >> cmake/config.cmake
-# echo set\(USE_BLAS openblas\) >> cmake/config.cmake
-
-# # set debugging flags
-# echo set\(USE_GRAPH_EXECUTOR ON\) >> cmake/config.cmake
-# echo set\(USE_PROFILER ON\) >> cmake/config.cmake
+# copy our own config.cmake to the root tvm directory.
+cp /infra/config.cmake .
 
 cd /usr/tvm
 mkdir -p build
 cd build
-cmake ..
-make -j8
+cmake .. -G Ninja
+ninja

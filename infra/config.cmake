@@ -142,7 +142,7 @@ set(USE_MICRO_STANDALONE_RUNTIME OFF)
 # - OFF: disable llvm, note this will disable CPU codegen
 #        which is needed for most cases
 # - /path/to/llvm-config: enable specific LLVM when multiple llvm-dev is available.
-set(USE_LLVM llvm-config-13)
+set(USE_LLVM ON)
 
 #---------------------------------------------
 # Contrib libraries
@@ -157,7 +157,7 @@ set(USE_LLVM llvm-config-13)
 set(USE_BYODT_POSIT OFF)
 
 # Whether use BLAS, choices: openblas, atlas, apple
-set(USE_BLAS openblas)
+set(USE_BLAS none)
 
 # Whether to use MKL
 # Possible values:

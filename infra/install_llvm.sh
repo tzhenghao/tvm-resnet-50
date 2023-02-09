@@ -2,10 +2,10 @@
 
 set -euxo pipefail
 
-echo deb http://apt.llvm.org/focal/ llvm-toolchain-focal main\
+echo deb http://apt.llvm.org/jammy/ llvm-toolchain-jammy main\
     >> /etc/apt/sources.list.d/llvm.list
 
-echo deb http://apt.llvm.org/focal/ llvm-toolchain-focal-13 main\
+echo deb http://apt.llvm.org/jammy/ llvm-toolchain-jammy-13 main\
     >> /etc/apt/sources.list.d/llvm.list
 
 apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 15CF4D18AF4F7421

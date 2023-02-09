@@ -10,16 +10,16 @@ WORKDIR $APP_HOME
 # Install git
 RUN apt-get update \
     && apt-get -y install git python3.10-dev python3-pip \
-    python3-setuptools gcc libtinfo-dev zlib1g-dev build-essential \
-    cmake libedit-dev libxml2-dev \
+    python3-setuptools libtinfo-dev zlib1g-dev build-essential \
+    cmake ninja-build libedit-dev libxml2-dev vim \
     && apt-get clean
 
 # Build LLVM
-COPY infra/config.cmake /infra/config.cmake
 COPY infra/install_llvm.sh /infra/install_llvm.sh
 RUN bash /infra/install_llvm.sh
 
 # Build TVM
+COPY infra/config.cmake /infra/config.cmake
 COPY infra/install_tvm.sh /infra/install_tvm.sh
 RUN bash /infra/install_tvm.sh
 
