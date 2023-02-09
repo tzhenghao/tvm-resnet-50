@@ -15,6 +15,7 @@ RUN apt-get update \
     && apt-get clean
 
 # Build LLVM
+COPY infra/config.cmake /infra/config.cmake
 COPY infra/install_llvm.sh /infra/install_llvm.sh
 RUN bash /infra/install_llvm.sh
 
