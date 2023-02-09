@@ -1,4 +1,5 @@
 # Standard imports
+
 import logging
 import timeit
 
@@ -18,6 +19,205 @@ TUNING_LOG_FILE = "resnet-50-v2-autotuning.json"
 TARGET = "llvm"
 COMPILED_PACKAGE_PATH = "resnet50-v2-7-tvm-python.tar"
 RUN_CUDA = True
+
+
+def run_gpu():
+    # Change this target to the correct backend for you gpu. For example: cuda (NVIDIA GPUs),
+    # rocm (Radeon GPUS), OpenCL (opencl).
+    tgt_gpu = tvm.target.Target(target="cuda", host="llvm")
+
+    # Recreate the schedule
+    n = te.var("n")
+    A = te.placeholder((n,), name="A")
+    B = te.placeholder((n,), name="B")
+    C = te.compute(A.shape, lambda i: A[i] + B[i], name="C")
+    print(type(C))
+
+    s = te.create_schedule(C.op)
+
+    bx, tx = s[C].split(C.op.axis[0], factor=64)
+
+    ################################################################################
+    # Finally we must bind the iteration axis bx and tx to threads in the GPU
+    # compute grid. The naive schedule is not valid for GPUs, and these are
+    # specific constructs that allow us to generate code that runs on a GPU.
+
+    s[C].bind(bx, te.thread_axis("blockIdx.x"))
+    s[C].bind(tx, te.thread_axis("threadIdx.x"))
+
+    ######################################################################
+    # Compilation
+    # -----------
+    # After we have finished specifying the schedule, we can compile it
+    # into a TVM function. By default TVM compiles into a type-erased
+    # function that can be directly called from the python side.
+    #
+    # In the following line, we use tvm.build to create a function.
+    # The build function takes the schedule, the desired signature of the
+    # function (including the inputs and outputs) as well as target language
+    # we want to compile to.
+    #
+    # The result of compilation fadd is a GPU device function (if GPU is
+    # involved) as well as a host wrapper that calls into the GPU
+    # function. fadd is the generated host wrapper function, it contains
+    # a reference to the generated device function internally.
+
+    fadd = tvm.build(s, [A, B, C], target=tgt_gpu, name="myadd")
+
+    ################################################################################
+    # The compiled TVM function exposes a concise C API that can be invoked from
+    # any language.
+    #
+    # We provide a minimal array API in python to aid quick testing and prototyping.
+    # The array API is based on the `DLPack <https://github.com/dmlc/dlpack>`_ standard.
+    #
+    # - We first create a GPU device.
+    # - Then tvm.nd.array copies the data to the GPU.
+    # - ``fadd`` runs the actual computation
+    # - ``numpy()`` copies the GPU array back to the CPU (so we can verify correctness).
+    #
+    # Note that copying the data to and from the memory on the GPU is a required step.
+
+    dev = tvm.device(tgt_gpu.kind.name, 0)
+
+    n = 1024
+    a = tvm.nd.array(np.random.uniform(size=n).astype(A.dtype), dev)
+    b = tvm.nd.array(np.random.uniform(size=n).astype(B.dtype), dev)
+    c = tvm.nd.array(np.zeros(n, dtype=C.dtype), dev)
+    fadd(a, b, c)
+    tvm.testing.assert_allclose(c.numpy(), a.numpy() + b.numpy())
+
+    ################################################################################
+    # Inspect the Generated GPU Code
+    # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    # You can inspect the generated code in TVM. The result of tvm.build is a TVM
+    # Module. fadd is the host module that contains the host wrapper, it also
+    # contains a device module for the CUDA (GPU) function.
+    #
+    # The following code fetches the device module and prints the content code.
+
+    if (
+        tgt_gpu.kind.name == "cuda"
+        or tgt_gpu.kind.name == "rocm"
+        or tgt_gpu.kind.name.startswith("opencl")
+    ):
+        dev_module = fadd.imported_modules[0]
+        click.secho("-----GPU code-----", fg="yellow", bold=True)
+        click.secho(dev_module.get_source(), fg="yellow")
+    else:
+        click.secho("non-GPU code:", fg="yellow")
+        click.secho(fadd.get_source(), fg="yelow")
+
+    ################################################################################
+    # Saving and Loading Compiled Modules
+    # -----------------------------------
+    # Besides runtime compilation, we can save the compiled modules into a file and
+    # load them back later.
+    #
+    # The following code first performs the following steps:
+    #
+    # - It saves the compiled host module into an object file.
+    # - Then it saves the device module into a ptx file.
+    # - cc.create_shared calls a compiler (gcc) to create a shared library
+
+    click.secho("Saving compiled module...", fg="green", bold=True)
+    temp = utils.tempdir()
+    fadd.save(temp.relpath("myadd.o"))
+
+    # TODO(zheng): Figure out why this needs to be .ptx
+    if tgt_gpu.kind.name == "cuda":
+        fadd.imported_modules[0].save(temp.relpath("myadd.cubin"))
+    if tgt_gpu.kind.name == "rocm":
+        fadd.imported_modules[0].save(temp.relpath("myadd.hsaco"))
+    if tgt_gpu.kind.name.startswith("opencl"):
+        fadd.imported_modules[0].save(temp.relpath("myadd.cl"))
+    cc.create_shared(temp.relpath("myadd.so"), [temp.relpath("myadd.o")])
+    click.secho(temp.listdir(), fg="green")
+
+    ################################################################################
+    # .. admonition:: Module Storage Format
+    #
+    #   The CPU (host) module is directly saved as a shared library (.so). There
+    #   can be multiple customized formats of the device code. In our example, the
+    #   device code is stored in ptx, as well as a meta data json file. They can be
+    #   loaded and linked separately via import.
+
+    ################################################################################
+    # Load Compiled Module
+    # ~~~~~~~~~~~~~~~~~~~~
+    # We can load the compiled module from the file system and run the code. The
+    # following code loads the host and device module separately and links them
+    # together. We can verify that the newly loaded function works.
+
+    click.secho("Loading compiled module...", fg="green", bold=True)
+    fadd1 = tvm.runtime.load_module(temp.relpath("myadd.so"))
+
+    # TODO(zheng): Figure out why this needs to be .ptx
+    if tgt_gpu.kind.name == "cuda":
+        fadd1_dev = tvm.runtime.load_module(temp.relpath("myadd.cubin"))
+        fadd1.import_module(fadd1_dev)
+
+    if tgt_gpu.kind.name == "rocm":
+        fadd1_dev = tvm.runtime.load_module(temp.relpath("myadd.hsaco"))
+        fadd1.import_module(fadd1_dev)
+
+    if tgt_gpu.kind.name.startswith("opencl"):
+        fadd1_dev = tvm.runtime.load_module(temp.relpath("myadd.cl"))
+        fadd1.import_module(fadd1_dev)
+
+    fadd1(a, b, c)
+    tvm.testing.assert_allclose(c.numpy(), a.numpy() + b.numpy())
+
+    ################################################################################
+    # Pack Everything into One Library
+    # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    # In the above example, we store the device and host code separately. TVM also
+    # supports export everything as one shared library. Under the hood, we pack
+    # the device modules into binary blobs and link them together with the host
+    # code. Currently we support packing of Metal, OpenCL and CUDA modules.
+
+    click.secho(
+        "Packing everything into one library...", fg="green", bold=True
+    )
+
+    temp = utils.tempdir()
+    fadd.export_library(temp.relpath("myadd_pack.so"))
+    fadd2 = tvm.runtime.load_module(temp.relpath("myadd_pack.so"))
+    fadd2(a, b, c)
+    tvm.testing.assert_allclose(c.numpy(), a.numpy() + b.numpy())
+
+    ################################################################################
+    # .. admonition:: Runtime API and Thread-Safety
+    #
+    #   The compiled modules of TVM do not depend on the TVM compiler. Instead,
+    #   they only depend on a minimum runtime library. The TVM runtime library
+    #   wraps the device drivers and provides thread-safe and device agnostic calls
+    #   into the compiled functions.
+    #
+    #   This means that you can call the compiled TVM functions from any thread, on
+    #   any GPUs, provided that you have compiled the code for that GPU.
+
+    ################################################################################
+    # Generate OpenCL Code
+    # --------------------
+    # TVM provides code generation features into multiple backends. We can also
+    # generate OpenCL code or LLVM code that runs on CPU backends.
+    #
+    # The following code blocks generate OpenCL code, creates array on an OpenCL
+    # device, and verifies the correctness of the code.
+
+    if tgt.kind.name.startswith("opencl"):
+        fadd_cl = tvm.build(s, [A, B, C], tgt, name="myadd")
+        print("------opencl code------")
+        print(fadd_cl.imported_modules[0].get_source())
+        dev = tvm.cl(0)
+        n = 1024
+        a = tvm.nd.array(np.random.uniform(size=n).astype(A.dtype), dev)
+        b = tvm.nd.array(np.random.uniform(size=n).astype(B.dtype), dev)
+        c = tvm.nd.array(np.zeros(n, dtype=C.dtype), dev)
+        fadd_cl(a, b, c)
+        tvm.testing.assert_allclose(c.numpy(), a.numpy() + b.numpy())
+
 
 if __name__ == "__main__":
     ################################################################################
@@ -291,199 +491,10 @@ if __name__ == "__main__":
     # Note that by default this example is not run in the docs CI.
 
     if RUN_CUDA:
-        # Change this target to the correct backend for you gpu. For example: cuda (NVIDIA GPUs),
-        # rocm (Radeon GPUS), OpenCL (opencl).
-        tgt_gpu = tvm.target.Target(target="cuda", host="llvm")
-
-        # Recreate the schedule
-        n = te.var("n")
-        A = te.placeholder((n,), name="A")
-        B = te.placeholder((n,), name="B")
-        C = te.compute(A.shape, lambda i: A[i] + B[i], name="C")
-        print(type(C))
-
-        s = te.create_schedule(C.op)
-
-        bx, tx = s[C].split(C.op.axis[0], factor=64)
-
-        ################################################################################
-        # Finally we must bind the iteration axis bx and tx to threads in the GPU
-        # compute grid. The naive schedule is not valid for GPUs, and these are
-        # specific constructs that allow us to generate code that runs on a GPU.
-
-        s[C].bind(bx, te.thread_axis("blockIdx.x"))
-        s[C].bind(tx, te.thread_axis("threadIdx.x"))
-
-        ######################################################################
-        # Compilation
-        # -----------
-        # After we have finished specifying the schedule, we can compile it
-        # into a TVM function. By default TVM compiles into a type-erased
-        # function that can be directly called from the python side.
-        #
-        # In the following line, we use tvm.build to create a function.
-        # The build function takes the schedule, the desired signature of the
-        # function (including the inputs and outputs) as well as target language
-        # we want to compile to.
-        #
-        # The result of compilation fadd is a GPU device function (if GPU is
-        # involved) as well as a host wrapper that calls into the GPU
-        # function. fadd is the generated host wrapper function, it contains
-        # a reference to the generated device function internally.
-
-        fadd = tvm.build(s, [A, B, C], target=tgt_gpu, name="myadd")
-
-        ################################################################################
-        # The compiled TVM function exposes a concise C API that can be invoked from
-        # any language.
-        #
-        # We provide a minimal array API in python to aid quick testing and prototyping.
-        # The array API is based on the `DLPack <https://github.com/dmlc/dlpack>`_ standard.
-        #
-        # - We first create a GPU device.
-        # - Then tvm.nd.array copies the data to the GPU.
-        # - ``fadd`` runs the actual computation
-        # - ``numpy()`` copies the GPU array back to the CPU (so we can verify correctness).
-        #
-        # Note that copying the data to and from the memory on the GPU is a required step.
-
-        dev = tvm.device(tgt_gpu.kind.name, 0)
-
-        n = 1024
-        a = tvm.nd.array(np.random.uniform(size=n).astype(A.dtype), dev)
-        b = tvm.nd.array(np.random.uniform(size=n).astype(B.dtype), dev)
-        c = tvm.nd.array(np.zeros(n, dtype=C.dtype), dev)
-        fadd(a, b, c)
-        tvm.testing.assert_allclose(c.numpy(), a.numpy() + b.numpy())
-
-        ################################################################################
-        # Inspect the Generated GPU Code
-        # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-        # You can inspect the generated code in TVM. The result of tvm.build is a TVM
-        # Module. fadd is the host module that contains the host wrapper, it also
-        # contains a device module for the CUDA (GPU) function.
-        #
-        # The following code fetches the device module and prints the content code.
-
-        if (
-            tgt_gpu.kind.name == "cuda"
-            or tgt_gpu.kind.name == "rocm"
-            or tgt_gpu.kind.name.startswith("opencl")
-        ):
-            dev_module = fadd.imported_modules[0]
-            click.secho("-----GPU code-----", fg="yellow", bold=True)
-            click.secho(dev_module.get_source(), fg="yellow")
-        else:
-            click.secho("non-GPU code:", fg="yellow")
-            click.secho(fadd.get_source(), fg="yelow")
-
-        ################################################################################
-        # Saving and Loading Compiled Modules
-        # -----------------------------------
-        # Besides runtime compilation, we can save the compiled modules into a file and
-        # load them back later.
-        #
-        # The following code first performs the following steps:
-        #
-        # - It saves the compiled host module into an object file.
-        # - Then it saves the device module into a ptx file.
-        # - cc.create_shared calls a compiler (gcc) to create a shared library
-
-        click.secho("Saving compiled module...", fg="green", bold=True)
-        temp = utils.tempdir()
-        fadd.save(temp.relpath("myadd.o"))
-
-        # TODO(zheng): Figure out why this needs to be .ptx
-        if tgt_gpu.kind.name == "cuda":
-            fadd.imported_modules[0].save(temp.relpath("myadd.cubin"))
-        if tgt_gpu.kind.name == "rocm":
-            fadd.imported_modules[0].save(temp.relpath("myadd.hsaco"))
-        if tgt_gpu.kind.name.startswith("opencl"):
-            fadd.imported_modules[0].save(temp.relpath("myadd.cl"))
-        cc.create_shared(temp.relpath("myadd.so"), [temp.relpath("myadd.o")])
-        click.secho(temp.listdir(), fg="green")
-
-        ################################################################################
-        # .. admonition:: Module Storage Format
-        #
-        #   The CPU (host) module is directly saved as a shared library (.so). There
-        #   can be multiple customized formats of the device code. In our example, the
-        #   device code is stored in ptx, as well as a meta data json file. They can be
-        #   loaded and linked separately via import.
-
-        ################################################################################
-        # Load Compiled Module
-        # ~~~~~~~~~~~~~~~~~~~~
-        # We can load the compiled module from the file system and run the code. The
-        # following code loads the host and device module separately and links them
-        # together. We can verify that the newly loaded function works.
-
-        click.secho("Loading compiled module...", fg="green", bold=True)
-        fadd1 = tvm.runtime.load_module(temp.relpath("myadd.so"))
-
-        # TODO(zheng): Figure out why this needs to be .ptx
-        if tgt_gpu.kind.name == "cuda":
-            fadd1_dev = tvm.runtime.load_module(temp.relpath("myadd.cubin"))
-            fadd1.import_module(fadd1_dev)
-
-        if tgt_gpu.kind.name == "rocm":
-            fadd1_dev = tvm.runtime.load_module(temp.relpath("myadd.hsaco"))
-            fadd1.import_module(fadd1_dev)
-
-        if tgt_gpu.kind.name.startswith("opencl"):
-            fadd1_dev = tvm.runtime.load_module(temp.relpath("myadd.cl"))
-            fadd1.import_module(fadd1_dev)
-
-        fadd1(a, b, c)
-        tvm.testing.assert_allclose(c.numpy(), a.numpy() + b.numpy())
-
-    ################################################################################
-    # Pack Everything into One Library
-    # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    # In the above example, we store the device and host code separately. TVM also
-    # supports export everything as one shared library. Under the hood, we pack
-    # the device modules into binary blobs and link them together with the host
-    # code. Currently we support packing of Metal, OpenCL and CUDA modules.
-
-    click.secho("Packing everything into one library...", fg="green", bold=True)
-
-    temp = utils.tempdir()
-    fadd.export_library(temp.relpath("myadd_pack.so"))
-    fadd2 = tvm.runtime.load_module(temp.relpath("myadd_pack.so"))
-    fadd2(a, b, c)
-    tvm.testing.assert_allclose(c.numpy(), a.numpy() + b.numpy())
-
-    ################################################################################
-    # .. admonition:: Runtime API and Thread-Safety
-    #
-    #   The compiled modules of TVM do not depend on the TVM compiler. Instead,
-    #   they only depend on a minimum runtime library. The TVM runtime library
-    #   wraps the device drivers and provides thread-safe and device agnostic calls
-    #   into the compiled functions.
-    #
-    #   This means that you can call the compiled TVM functions from any thread, on
-    #   any GPUs, provided that you have compiled the code for that GPU.
-
-    ################################################################################
-    # Generate OpenCL Code
-    # --------------------
-    # TVM provides code generation features into multiple backends. We can also
-    # generate OpenCL code or LLVM code that runs on CPU backends.
-    #
-    # The following code blocks generate OpenCL code, creates array on an OpenCL
-    # device, and verifies the correctness of the code.
-
-    if tgt.kind.name.startswith("opencl"):
-        fadd_cl = tvm.build(s, [A, B, C], tgt, name="myadd")
-        print("------opencl code------")
-        print(fadd_cl.imported_modules[0].get_source())
-        dev = tvm.cl(0)
-        n = 1024
-        a = tvm.nd.array(np.random.uniform(size=n).astype(A.dtype), dev)
-        b = tvm.nd.array(np.random.uniform(size=n).astype(B.dtype), dev)
-        c = tvm.nd.array(np.zeros(n, dtype=C.dtype), dev)
-        fadd_cl(a, b, c)
-        tvm.testing.assert_allclose(c.numpy(), a.numpy() + b.numpy())
+        click.secho(
+            "RUN_CUDA enabled, running gpu tests...", fg="yellow", bold=True
+        )
+        run_gpu()
 
     ################################################################################
     # .. admonition:: TE Scheduling Primitives
@@ -586,7 +597,11 @@ if __name__ == "__main__":
         stmt="answer = numpy.dot(a, b)",
         number=np_repeat,
     )
-    print("Numpy running time: %f" % (np_running_time / np_repeat))
+    click.secho(
+        "Numpy running time: %f" % (np_running_time / np_repeat),
+        fg="green",
+        bold=True,
+    )
 
     answer = numpy.dot(a.numpy(), b.numpy())
 
@@ -622,7 +637,9 @@ if __name__ == "__main__":
 
         evaluator = func.time_evaluator(func.entry_name, dev, number=10)
         mean_time = evaluator(a, b, c).mean
-        print("%s: %f" % (optimization, mean_time))
+        click.secho(
+            "%s: %f" % (optimization, mean_time), fg="green", bold=True
+        )
         log.append((optimization, mean_time))
 
     log = []
@@ -637,7 +654,7 @@ if __name__ == "__main__":
     # essentially a naive implementation of a matrix multiplication, using three
     # nested loops over the indices of the A and B matrices.
 
-    print(tvm.lower(s, [A, B, C], simple_mode=True))
+    click.secho(tvm.lower(s, [A, B, C], simple_mode=True), fg="yellow")
 
     ################################################################################
     # Optimization 1: Blocking
