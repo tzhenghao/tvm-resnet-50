@@ -20,5 +20,5 @@ echo set\(USE_PROFILER ON\) >> cmake/config.cmake
 cd /usr/tvm
 mkdir -p build
 cd build
-cmake .. -G Ninja
-ninja
+cmake ..
+make -j8
