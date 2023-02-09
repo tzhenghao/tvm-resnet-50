@@ -8,6 +8,8 @@ import numpy as np
 import tvm
 import tvm.testing
 from tvm import te
+from tvm.contrib import cc
+from tvm.contrib import utils
 
 logger = logging.getLogger(__name__)
 
@@ -15,8 +17,7 @@ logger = logging.getLogger(__name__)
 TUNING_LOG_FILE = "resnet-50-v2-autotuning.json"
 TARGET = "llvm"
 COMPILED_PACKAGE_PATH = "resnet50-v2-7-tvm-python.tar"
-enable_relay_stdout = False
-
+RUN_CUDA = True
 
 if __name__ == "__main__":
     ################################################################################
@@ -289,8 +290,7 @@ if __name__ == "__main__":
     # If you want to run this code, change ``run_cuda = True``
     # Note that by default this example is not run in the docs CI.
 
-    run_cuda = True
-    if run_cuda:
+    if RUN_CUDA:
         # Change this target to the correct backend for you gpu. For example: cuda (NVIDIA GPUs),
         # rocm (Radeon GPUS), OpenCL (opencl).
         tgt_gpu = tvm.target.Target(target="cuda", host="llvm")
@@ -374,7 +374,8 @@ if __name__ == "__main__":
             click.secho("-----GPU code-----", fg="yellow", bold=True)
             click.secho(dev_module.get_source(), fg="yellow")
         else:
-            print(fadd.get_source())
+            click.secho("non-GPU code:", fg="yellow")
+            click.secho(fadd.get_source(), fg="yelow")
 
         ################################################################################
         # Saving and Loading Compiled Modules
@@ -388,11 +389,11 @@ if __name__ == "__main__":
         # - Then it saves the device module into a ptx file.
         # - cc.create_shared calls a compiler (gcc) to create a shared library
 
-        from tvm.contrib import cc
-        from tvm.contrib import utils
-
+        click.secho("Saving compiled module...", fg="green", bold=True)
         temp = utils.tempdir()
         fadd.save(temp.relpath("myadd.o"))
+
+        # TODO(zheng): Figure out why this needs to be .ptx
         if tgt_gpu.kind.name == "cuda":
             fadd.imported_modules[0].save(temp.relpath("myadd.cubin"))
         if tgt_gpu.kind.name == "rocm":
@@ -417,7 +418,10 @@ if __name__ == "__main__":
         # following code loads the host and device module separately and links them
         # together. We can verify that the newly loaded function works.
 
+        click.secho("Loading compiled module...", fg="green", bold=True)
         fadd1 = tvm.runtime.load_module(temp.relpath("myadd.so"))
+
+        # TODO(zheng): Figure out why this needs to be .ptx
         if tgt_gpu.kind.name == "cuda":
             fadd1_dev = tvm.runtime.load_module(temp.relpath("myadd.cubin"))
             fadd1.import_module(fadd1_dev)
@@ -441,6 +445,9 @@ if __name__ == "__main__":
     # the device modules into binary blobs and link them together with the host
     # code. Currently we support packing of Metal, OpenCL and CUDA modules.
 
+    click.secho("Packing everything into one library...", fg="green", bold=True)
+
+    temp = utils.tempdir()
     fadd.export_library(temp.relpath("myadd_pack.so"))
     fadd2 = tvm.runtime.load_module(temp.relpath("myadd_pack.so"))
     fadd2(a, b, c)

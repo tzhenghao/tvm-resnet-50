@@ -16,3 +16,17 @@ installed and that your supported GPUs are listed there.
 Here's an example of the AutoTVM output:
 
 ![autotvm-sample-output](/images/autotvm_run_sample_output.png)
+
+### Parallel Implementation IR
+
+![sample-parallel-ir](/images/sample-parallel-ir.png)
+
+### GPU Implementation IR
+
+![sample-gpu-code](/images/sample-gpu-code.png)
+
+### Manually optimizing the matrix multiplication IR
+
+![sample-manual-matmul-1](/images/sample-manual-matmul-1.png)
+
+![sample-manual-matmul-2](/images/sample-manual-matmul-2.png)
