@@ -7,7 +7,7 @@ RUN mkdir -p $APP_HOME
 # Set the working directory in the container
 WORKDIR $APP_HOME
 
-# Install git
+# Install basic packages.
 RUN apt-get update \
     && apt-get -y install git python3.10-dev python3-pip \
     python3-setuptools libtinfo-dev zlib1g-dev build-essential \
