@@ -545,8 +545,13 @@ if __name__ == "__main__":
     # `repository <https://github.com/flame/how-to-optimize-gemm>`_. Some of them
     # have been applied by TVM abstraction automatically, but some of them cannot
     # be automatically applied due to TVM constraints.
+    click.secho(
+        "Example 2: Manually Optimizing Matrix Multiplication with TE...",
+        fg="green",
+        bold=True,
+    )
 
-    ################################################################################
+    ###########################################################################
     # Preparation and Performance Baseline
     # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     #
@@ -555,7 +560,8 @@ if __name__ == "__main__":
 
     # The size of the matrix
     # (M, K) x (K, N)
-    # You are free to try out different shapes, sometimes TVM optimization outperforms numpy with MKL.
+    # You are free to try out different shapes, sometimes TVM optimization
+    # outperforms numpy with MKL.
     M = 1024
     K = 1024
     N = 1024
@@ -648,7 +654,6 @@ if __name__ == "__main__":
     # default schedule using the TVM lower function. Note how the implementation is
     # essentially a naive implementation of a matrix multiplication, using three
     # nested loops over the indices of the A and B matrices.
-
     click.secho(tvm.lower(s, [A, B, C], simple_mode=True), fg="yellow")
 
     ################################################################################
@@ -913,18 +918,20 @@ if __name__ == "__main__":
     # working, we can compare the results.
 
     baseline = log[0][1]
-    print(
+    click.secho(
         "%s\t%s\t%s"
-        % ("Operator".rjust(20), "Timing".rjust(20), "Performance".rjust(20))
+        % ("Operator".rjust(20), "Timing".rjust(20), "Performance".rjust(20)),
+        fg="green",
     )
     for result in log:
-        print(
+        click.secho(
             "%s\t%s\t%s"
             % (
                 result[0].rjust(20),
                 str(result[1]).rjust(20),
                 str(result[1] / baseline).rjust(20),
-            )
+            ),
+            fg="green",
         )
 
     ################################################################################
