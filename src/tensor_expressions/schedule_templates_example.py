@@ -9,7 +9,9 @@ import tvm
 import tvm.testing
 from tvm import autotvm, te
 
+TARGET = "llvm"
 NUM_MEASUREMENTS = 5
+TUNING_OUTPUT_FILE = "matmul.log"
 
 
 def matmul_basic(N, L, M, dtype):
@@ -99,7 +101,7 @@ def matmul(N, L, M, dtype):
 if __name__ == "__main__":
     N, L, M = 512, 512, 512
     task = autotvm.task.create(
-        "tutorial/matmul", args=(N, L, M, "float32"), target="llvm"
+        "tutorial/matmul", args=(N, L, M, "float32"), target=TARGET
     )
 
     click.secho("CONFIG SPACE:", fg="green", bold=True)
@@ -119,5 +121,21 @@ if __name__ == "__main__":
     tuner.tune(
         n_trial=10,
         measure_option=measure_option,
-        callbacks=[autotvm.callback.log_to_file("matmul.log")],
+        callbacks=[autotvm.callback.log_to_file(TUNING_OUTPUT_FILE)],
     )
+
+    # apply history best from log file
+    with autotvm.apply_history_best(TUNING_OUTPUT_FILE):
+        with tvm.target.Target(TARGET):
+            s, arg_bufs = matmul(N, L, M, "float32")
+            func = tvm.build(s, arg_bufs)
+
+    # check correctness
+    a_np = np.random.uniform(size=(N, L)).astype(np.float32)
+    b_np = np.random.uniform(size=(L, M)).astype(np.float32)
+    c_np = a_np.dot(b_np)
+
+    c_tvm = tvm.nd.empty(c_np.shape)
+    func(tvm.nd.array(a_np), tvm.nd.array(b_np), c_tvm)
+
+    tvm.testing.assert_allclose(c_np, c_tvm.numpy(), rtol=1e-4)
