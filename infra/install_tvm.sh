@@ -15,3 +15,8 @@ mkdir -p build
 cd build
 cmake .. -G Ninja
 ninja
+
+# To make TVM run faster in tuning, it is recommended to use cython as FFI of
+# TVM.
+cd /usr/tvm
+make cython3
