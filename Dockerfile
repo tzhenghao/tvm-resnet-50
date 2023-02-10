@@ -18,14 +18,14 @@ RUN apt-get update \
 COPY infra/install_llvm.sh /infra/install_llvm.sh
 RUN bash /infra/install_llvm.sh
 
+# copy the dependencies file to the working directory and install them.
+COPY requirements.txt .
+RUN pip install -r requirements.txt
+
 # Build TVM
 COPY infra/config.cmake /infra/config.cmake
 COPY infra/install_tvm.sh /infra/install_tvm.sh
 RUN bash /infra/install_tvm.sh
-
-# copy the dependencies file to the working directory and install them.
-COPY requirements.txt .
-RUN pip install -r requirements.txt
 
 # Environment variables
 ENV PYTHONPATH=/usr/tvm/python:/usr/tvm/vta/python:${PYTHONPATH}
