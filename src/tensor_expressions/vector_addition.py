@@ -1,5 +1,4 @@
 # Standard imports
-
 import logging
 import timeit
 
@@ -9,8 +8,7 @@ import numpy as np
 import tvm
 import tvm.testing
 from tvm import te
-from tvm.contrib import cc
-from tvm.contrib import utils
+from tvm.contrib import cc, utils
 
 logger = logging.getLogger(__name__)
 
@@ -327,6 +325,7 @@ if __name__ == "__main__":
     ################################################################################
     # To get a comparison of how fast this version is compared to numpy, create a
     # helper function to run a profile of the TVM generated code.
+    # Standard imports
     import timeit
 
     np_repeat = 100
