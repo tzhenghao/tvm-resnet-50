@@ -1,6 +1,7 @@
 # Standard imports
 import logging
 import sys
+import click
 
 # Third party imports
 import numpy as np
@@ -94,4 +95,10 @@ def matmul(N, L, M, dtype):
 
 
 if __name__ == "__main__":
-    pass
+    N, L, M = 512, 512, 512
+    task = autotvm.task.create(
+        "tutorial/matmul", args=(N, L, M, "float32"), target="llvm"
+    )
+
+    click.secho("CONFIG SPACE:", fg="green", bold=True)
+    click.secho(task.config_space, fg="green")
