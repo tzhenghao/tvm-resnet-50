@@ -9,6 +9,8 @@ import tvm
 import tvm.testing
 from tvm import autotvm, te
 
+NUM_MEASUREMENTS = 5
+
 
 def matmul_basic(N, L, M, dtype):
     A = te.placeholder((N, L), name="A", dtype=dtype)
@@ -102,3 +104,20 @@ if __name__ == "__main__":
 
     click.secho("CONFIG SPACE:", fg="green", bold=True)
     click.secho(task.config_space, fg="green")
+
+    # logging config (for printing tuning log to the screen)
+    logging.getLogger("autotvm").setLevel(logging.DEBUG)
+    logging.getLogger("autotvm").addHandler(logging.StreamHandler(sys.stdout))
+
+    measure_option = autotvm.measure_option(
+        builder="local", runner=autotvm.LocalRunner(number=NUM_MEASUREMENTS)
+    )
+
+    # Begin tuning with RandomTuner, log records to file `matmul.log`
+    # You can use alternatives like XGBTuner.
+    tuner = autotvm.tuner.RandomTuner(task)
+    tuner.tune(
+        n_trial=10,
+        measure_option=measure_option,
+        callbacks=[autotvm.callback.log_to_file("matmul.log")],
+    )
